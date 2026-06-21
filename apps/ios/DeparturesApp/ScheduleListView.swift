@@ -178,10 +178,12 @@ struct AddRouteView: View {
     @State private var name = ""
     @State private var origin: RouteEndpoint?
     @State private var destination: RouteEndpoint?
-    @State private var activeStartTime = "07:00"
-    @State private var activeEndTime = "09:00"
-    @State private var earliestLeaveTime = ""
-    @State private var arrivalEndTime = ""
+    @State private var activeStartTime = TimeOfDay(hour: 7, minute: 0).date
+    @State private var activeEndTime = TimeOfDay(hour: 9, minute: 0).date
+    @State private var earliestLeaveTime = TimeOfDay(hour: 7, minute: 30).date
+    @State private var arrivalEndTime = TimeOfDay(hour: 9, minute: 30).date
+    @State private var usesEarliestLeaveTime = false
+    @State private var usesArrivalEndTime = false
     @State private var walkMinutes = 12
     @State private var tripsToShow = 3
     @State private var weekdays = Set(DeparturesWeekday.allCases.prefix(5))
@@ -190,7 +192,7 @@ struct AddRouteView: View {
         NavigationStack {
             Form {
                 Section("Route") {
-                    TextField("Name", text: $name)
+                    TextField(defaultRouteName, text: $name)
                     StationPickerRow(title: "From", selection: $origin)
                     StationPickerRow(title: "To", selection: $destination)
                 }
@@ -200,14 +202,16 @@ struct AddRouteView: View {
                 }
 
                 Section("Timing") {
-                    TextField("Start showing", text: $activeStartTime)
-                        .textInputAutocapitalization(.never)
-                    TextField("Stop showing", text: $activeEndTime)
-                        .textInputAutocapitalization(.never)
-                    TextField("Earliest leave time", text: $earliestLeaveTime)
-                        .textInputAutocapitalization(.never)
-                    TextField("Latest arrival time", text: $arrivalEndTime)
-                        .textInputAutocapitalization(.never)
+                    DatePicker("Start showing", selection: $activeStartTime, displayedComponents: .hourAndMinute)
+                    DatePicker("Stop showing", selection: $activeEndTime, displayedComponents: .hourAndMinute)
+                    Toggle("Earliest leave", isOn: $usesEarliestLeaveTime)
+                    if usesEarliestLeaveTime {
+                        DatePicker("Time", selection: $earliestLeaveTime, displayedComponents: .hourAndMinute)
+                    }
+                    Toggle("Latest arrival", isOn: $usesArrivalEndTime)
+                    if usesArrivalEndTime {
+                        DatePicker("Time", selection: $arrivalEndTime, displayedComponents: .hourAndMinute)
+                    }
                     Stepper("Walk \(walkMinutes) min", value: $walkMinutes, in: 0...60)
                     Stepper("Show \(tripsToShow) trips", value: $tripsToShow, in: 1...6)
                 }
@@ -246,23 +250,35 @@ struct AddRouteView: View {
     }
 
     private var input: DepartureScheduleInput? {
-        guard let origin, let destination, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !weekdays.isEmpty else {
+        guard let origin, let destination, !weekdays.isEmpty else {
             return nil
         }
         return DepartureScheduleInput(
-            name: name,
+            name: resolvedRouteName,
             enabled: true,
             weekdays: DeparturesWeekday.allCases.filter { weekdays.contains($0) },
-            activeStartTime: activeStartTime,
-            activeEndTime: activeEndTime,
-            earliestLeaveTime: earliestLeaveTime.nilIfBlank,
+            activeStartTime: activeStartTime.hhmmString,
+            activeEndTime: activeEndTime.hhmmString,
+            earliestLeaveTime: usesEarliestLeaveTime ? earliestLeaveTime.hhmmString : nil,
             arrivalWindowStartTime: nil,
-            arrivalWindowEndTime: arrivalEndTime.nilIfBlank,
+            arrivalWindowEndTime: usesArrivalEndTime ? arrivalEndTime.hhmmString : nil,
             walkMinutes: walkMinutes,
             tripsToShow: tripsToShow,
             origin: origin,
             destination: destination
         )
+    }
+
+    private var defaultRouteName: String {
+        guard let origin, let destination else {
+            return "Route name"
+        }
+        return "\(origin.name) to \(destination.name)"
+    }
+
+    private var resolvedRouteName: String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? defaultRouteName : trimmed
     }
 }
 
@@ -398,9 +414,18 @@ private extension DepartureSchedule {
     }
 }
 
-private extension String {
-    var nilIfBlank: String? {
-        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+private struct TimeOfDay {
+    let hour: Int
+    let minute: Int
+
+    var date: Date {
+        Calendar.current.date(from: DateComponents(hour: hour, minute: minute)) ?? Date()
+    }
+}
+
+private extension Date {
+    var hhmmString: String {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: self)
+        return String(format: "%02d:%02d", components.hour ?? 0, components.minute ?? 0)
     }
 }

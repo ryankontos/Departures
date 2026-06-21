@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
+import { ZodError } from "zod";
 import type { ApnsLiveActivityClient } from "./liveActivity.js";
 import {
   deviceRegistrationSchema,
@@ -18,6 +19,26 @@ type RouteDeps = {
 };
 
 export async function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
+  app.setErrorHandler((error, request, reply) => {
+    if (error instanceof ZodError) {
+      return reply.code(400).send({
+        error: "Validation Error",
+        message: "Invalid request body",
+        issues: error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message
+        }))
+      });
+    }
+
+    request.log.error(error);
+    const message = error instanceof Error ? error.message : "Unexpected server error";
+    return reply.code(500).send({
+      error: "Internal Server Error",
+      message
+    });
+  });
+
   app.get("/health", async () => ({ ok: true }));
   app.get("/api/health", async () => ({ ok: true }));
 

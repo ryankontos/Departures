@@ -3,6 +3,12 @@ import { z } from "zod";
 export const weekdaySchema = z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]);
 export type Weekday = z.infer<typeof weekdaySchema>;
 
+const timeSchema = z.string().regex(/^\d{2}:\d{2}$/);
+const optionalTimeSchema = z.preprocess(
+  (value) => (typeof value === "string" && value.trim().length === 0 ? undefined : value),
+  timeSchema.optional()
+);
+
 export const routeEndpointSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -16,11 +22,11 @@ export const scheduleSchema = z.object({
   name: z.string().min(1),
   enabled: z.boolean().default(true),
   weekdays: z.array(weekdaySchema).min(1),
-  activeStartTime: z.string().regex(/^\d{2}:\d{2}$/),
-  activeEndTime: z.string().regex(/^\d{2}:\d{2}$/),
-  earliestLeaveTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
-  arrivalWindowStartTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
-  arrivalWindowEndTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  activeStartTime: timeSchema,
+  activeEndTime: timeSchema,
+  earliestLeaveTime: optionalTimeSchema,
+  arrivalWindowStartTime: optionalTimeSchema,
+  arrivalWindowEndTime: optionalTimeSchema,
   walkMinutes: z.number().int().min(0).max(180),
   tripsToShow: z.number().int().min(1).max(6).default(3),
   origin: routeEndpointSchema,
