@@ -44,7 +44,11 @@ final class DeparturesModel: ObservableObject {
     func preview(_ input: DepartureScheduleInput) async {
         await perform("Loading next departures", success: "Departure preview loaded") {
             let request = JourneyPreviewRequest(schedule: input, now: Date())
-            previewTrips = try await api.post([TripSnapshot].self, path: "journeys/preview", body: request)
+            let trips = try await api.post([TripSnapshot].self, path: "journeys/preview", body: request)
+            guard !trips.isEmpty else {
+                throw DeparturesModelError.noMatchingTrips
+            }
+            previewTrips = trips
         }
     }
 
@@ -70,6 +74,9 @@ final class DeparturesModel: ObservableObject {
         await perform("Starting test Live Activity", success: "Test Live Activity started") {
             let request = JourneyPreviewRequest(schedule: input, now: Date())
             let trips = try await api.post([TripSnapshot].self, path: "journeys/preview", body: request)
+            guard !trips.isEmpty else {
+                throw DeparturesModelError.noMatchingTrips
+            }
             previewTrips = trips
 
             let scheduleId = UUID()
@@ -185,6 +192,17 @@ final class DeparturesModel: ObservableObject {
             let message = APIStatus.userFacingMessage(for: error)
             errorMessage = message
             apiStatus = .failure(message)
+        }
+    }
+}
+
+enum DeparturesModelError: LocalizedError {
+    case noMatchingTrips
+
+    var errorDescription: String? {
+        switch self {
+        case .noMatchingTrips:
+            "No matching trips were found for this route and arrival window."
         }
     }
 }

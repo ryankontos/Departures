@@ -1,5 +1,5 @@
 import type { DepartureSchedule, StopSearchResult, TripLeg, TripSnapshot } from "./models.js";
-import { addMinutes, dateOnSydneyClock, maxDate } from "./time.js";
+import { addMinutes, dateOnSydneyClock, maxDate, zonedParts } from "./time.js";
 
 type TfnswClientOptions = {
   apiKey?: string;
@@ -50,17 +50,21 @@ export class TfnswClient {
   }
 
   async previewTrips(schedule: DepartureSchedule, now = new Date()): Promise<TripSnapshot[]> {
-    const requestedDeparture = this.requestedDepartureTime(schedule, now);
+    const serviceNow = this.previewReferenceTime(schedule, now);
+    const requestedDeparture = this.requestedDepartureTime(schedule, serviceNow);
+    const queryTime = schedule.arrivalWindowEndTime
+      ? dateOnSydneyClock(serviceNow, schedule.arrivalWindowEndTime, this.options.timeZone)
+      : requestedDeparture;
     const json = await this.request("trip", {
-      depArrMacro: "dep",
-      itdDate: formatTfnswDate(requestedDeparture),
-      itdTime: formatTfnswTime(requestedDeparture),
+      depArrMacro: schedule.arrivalWindowEndTime ? "arr" : "dep",
+      itdDate: formatTfnswDate(queryTime),
+      itdTime: formatTfnswTime(queryTime),
       type_origin: schedule.origin.type === "coord" ? "coord" : "stop",
       name_origin: schedule.origin.id,
       type_destination: schedule.destination.type === "coord" ? "coord" : "stop",
       name_destination: schedule.destination.id,
       TfNSWTR: "true",
-      calcNumberOfTrips: String(Math.max(schedule.tripsToShow, 5))
+      calcNumberOfTrips: String(Math.max(schedule.tripsToShow * 4, 12))
     });
 
     const journeys = Array.isArray(json.journeys) ? json.journeys : [];
@@ -71,15 +75,16 @@ export class TfnswClient {
         const leave = new Date(trip.leaveTime);
         if (leave.getTime() + 3 * 60_000 < now.getTime()) return false;
         if (schedule.arrivalWindowStartTime) {
-          const start = dateOnSydneyClock(now, schedule.arrivalWindowStartTime, this.options.timeZone);
+          const start = dateOnSydneyClock(serviceNow, schedule.arrivalWindowStartTime, this.options.timeZone);
           if (new Date(trip.arrivalTime).getTime() < start.getTime()) return false;
         }
         if (schedule.arrivalWindowEndTime) {
-          const end = dateOnSydneyClock(now, schedule.arrivalWindowEndTime, this.options.timeZone);
+          const end = dateOnSydneyClock(serviceNow, schedule.arrivalWindowEndTime, this.options.timeZone);
           if (new Date(trip.arrivalTime).getTime() > end.getTime()) return false;
         }
         return true;
       })
+      .sort((left: TripSnapshot, right: TripSnapshot) => new Date(left.departureTime).getTime() - new Date(right.departureTime).getTime())
       .slice(0, schedule.tripsToShow);
   }
 
@@ -88,6 +93,23 @@ export class TfnswClient {
     if (!schedule.earliestLeaveTime) return byWalkLead;
     const earliestLeave = dateOnSydneyClock(now, schedule.earliestLeaveTime, this.options.timeZone);
     return maxDate(byWalkLead, addMinutes(earliestLeave, schedule.walkMinutes));
+  }
+
+  private previewReferenceTime(schedule: DepartureSchedule, now: Date): Date {
+    const targetDay = this.nextPreviewDay(schedule, now);
+    return dateOnSydneyClock(targetDay, schedule.activeStartTime, this.options.timeZone);
+  }
+
+  private nextPreviewDay(schedule: DepartureSchedule, now: Date): Date {
+    const endTime = schedule.arrivalWindowEndTime ?? schedule.activeEndTime;
+    for (let dayOffset = 0; dayOffset < 8; dayOffset += 1) {
+      const candidate = addMinutes(now, dayOffset * 24 * 60);
+      const parts = zonedParts(candidate, this.options.timeZone);
+      if (!schedule.weekdays.includes(parts.weekday)) continue;
+      if (dayOffset === 0 && !isBeforeOrEqual(parts.time, endTime)) continue;
+      return candidate;
+    }
+    return now;
   }
 
   private async request(apiCall: string, params: Record<string, string>): Promise<any> {
@@ -116,6 +138,15 @@ export class TfnswClient {
 
     return response.json();
   }
+}
+
+function isBeforeOrEqual(left: string, right: string): boolean {
+  return clockMinutes(left) <= clockMinutes(right);
+}
+
+function clockMinutes(value: string): number {
+  const [hours = "0", minutes = "0"] = value.split(":");
+  return Number(hours) * 60 + Number(minutes);
 }
 
 function uniqueById(stops: StopSearchResult[]): StopSearchResult[] {
