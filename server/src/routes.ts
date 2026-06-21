@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 import type { ApnsLiveActivityClient } from "./liveActivity.js";
 import {
   deviceRegistrationSchema,
+  type DepartureScheduleInput,
   journeyPreviewRequestSchema,
   pushTokenSchema,
   scheduleInputSchema,
@@ -57,7 +58,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
   app.get("/api/schedules", async (request) => deps.storage.listSchedulesForUser(userIdFrom(request)));
 
   app.post("/api/schedules", async (request, reply) => {
-    const input = scheduleInputSchema.parse(request.body);
+    const input = normalizeScheduleInput(scheduleInputSchema.parse(request.body));
     const now = new Date().toISOString();
     const schedule = deps.storage.upsertSchedule({
       ...input,
@@ -72,7 +73,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
   app.put("/api/schedules/:id", async (request) => {
     const id = String((request.params as any).id);
     const existing = deps.storage.getSchedule(id);
-    const input = scheduleInputSchema.parse(request.body);
+    const input = normalizeScheduleInput(scheduleInputSchema.parse(request.body));
     const now = new Date().toISOString();
     return deps.storage.upsertSchedule({
       ...input,
@@ -91,8 +92,9 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
   app.post("/api/journeys/preview", async (request) => {
     const parsed = journeyPreviewRequestSchema.parse(request.body);
     const now = parsed.now ? new Date(parsed.now) : new Date();
+    const input = normalizeScheduleInput(parsed.schedule);
     const schedule = {
-      ...parsed.schedule,
+      ...input,
       id: randomUUID(),
       userId: userIdFrom(request),
       createdAt: now.toISOString(),
@@ -143,6 +145,27 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
     });
     return reply.code(204).send();
   });
+}
+
+function normalizeScheduleInput(input: DepartureScheduleInput) {
+  const arrivalWindowStartTime = input.arrivalWindowStartTime ?? input.activeStartTime;
+  const arrivalWindowEndTime = input.arrivalWindowEndTime ?? input.activeEndTime;
+  const activeStartTime = input.activeStartTime ?? subtractMinutes(arrivalWindowStartTime!, 120);
+  const activeEndTime = input.activeEndTime ?? arrivalWindowEndTime!;
+
+  return {
+    ...input,
+    activeStartTime,
+    activeEndTime,
+    arrivalWindowStartTime,
+    arrivalWindowEndTime
+  };
+}
+
+function subtractMinutes(hhmm: string, minutesToSubtract: number): string {
+  const [hour = "0", minute = "0"] = hhmm.split(":");
+  const total = (Number(hour) * 60 + Number(minute) - minutesToSubtract + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
 function userIdFrom(request: any): string {

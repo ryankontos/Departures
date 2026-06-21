@@ -36,7 +36,23 @@ export const scheduleSchema = z.object({
 });
 export type DepartureSchedule = z.infer<typeof scheduleSchema>;
 
-export const scheduleInputSchema = scheduleSchema.omit({ id: true, userId: true, createdAt: true, updatedAt: true });
+export const scheduleInputSchema = scheduleSchema
+  .omit({ id: true, userId: true, createdAt: true, updatedAt: true })
+  .partial({
+    activeStartTime: true,
+    activeEndTime: true,
+    earliestLeaveTime: true,
+    arrivalWindowStartTime: true,
+    arrivalWindowEndTime: true
+  })
+  .refine((schedule) => Boolean(schedule.arrivalWindowStartTime ?? schedule.activeStartTime), {
+    path: ["arrivalWindowStartTime"],
+    message: "Earliest arrival time is required"
+  })
+  .refine((schedule) => Boolean(schedule.arrivalWindowEndTime ?? schedule.activeEndTime), {
+    path: ["arrivalWindowEndTime"],
+    message: "Latest arrival time is required"
+  });
 export type DepartureScheduleInput = z.infer<typeof scheduleInputSchema>;
 
 export const tripLegSchema = z.object({

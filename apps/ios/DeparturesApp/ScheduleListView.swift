@@ -124,7 +124,7 @@ struct ScheduleRow: View {
                         .background(.tint.opacity(0.14), in: Circle())
                 }
                 Spacer()
-                Text("\(schedule.activeStartTime)-\(schedule.activeEndTime)")
+                Text(schedule.arrivalWindowLabel)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -145,8 +145,8 @@ struct ScheduleDetailView: View {
             }
 
             Section("Timing") {
-                LabeledContent("Starts", value: schedule.activeStartTime)
-                LabeledContent("Stops", value: schedule.activeEndTime)
+                LabeledContent("Earliest arrival", value: schedule.arrivalWindowStartTime ?? schedule.activeStartTime)
+                LabeledContent("Latest arrival", value: schedule.arrivalWindowEndTime ?? schedule.activeEndTime)
                 LabeledContent("Walk", value: "\(schedule.walkMinutes) min")
                 LabeledContent("Trips", value: "\(schedule.tripsToShow)")
             }
@@ -178,12 +178,8 @@ struct AddRouteView: View {
     @State private var name = ""
     @State private var origin: RouteEndpoint?
     @State private var destination: RouteEndpoint?
-    @State private var activeStartTime = TimeOfDay(hour: 7, minute: 0).date
-    @State private var activeEndTime = TimeOfDay(hour: 9, minute: 0).date
-    @State private var earliestLeaveTime = TimeOfDay(hour: 7, minute: 30).date
-    @State private var arrivalEndTime = TimeOfDay(hour: 9, minute: 30).date
-    @State private var usesEarliestLeaveTime = false
-    @State private var usesArrivalEndTime = false
+    @State private var earliestArrivalTime = TimeOfDay(hour: 8, minute: 30).date
+    @State private var latestArrivalTime = TimeOfDay(hour: 9, minute: 30).date
     @State private var walkMinutes = 12
     @State private var tripsToShow = 3
     @State private var weekdays = Set(DeparturesWeekday.allCases.prefix(5))
@@ -202,16 +198,8 @@ struct AddRouteView: View {
                 }
 
                 Section("Timing") {
-                    DatePicker("Start showing", selection: $activeStartTime, displayedComponents: .hourAndMinute)
-                    DatePicker("Stop showing", selection: $activeEndTime, displayedComponents: .hourAndMinute)
-                    Toggle("Earliest leave", isOn: $usesEarliestLeaveTime)
-                    if usesEarliestLeaveTime {
-                        DatePicker("Time", selection: $earliestLeaveTime, displayedComponents: .hourAndMinute)
-                    }
-                    Toggle("Latest arrival", isOn: $usesArrivalEndTime)
-                    if usesArrivalEndTime {
-                        DatePicker("Time", selection: $arrivalEndTime, displayedComponents: .hourAndMinute)
-                    }
+                    DatePicker("Earliest arrival", selection: $earliestArrivalTime, displayedComponents: .hourAndMinute)
+                    DatePicker("Latest arrival", selection: $latestArrivalTime, displayedComponents: .hourAndMinute)
                     Stepper("Walk \(walkMinutes) min", value: $walkMinutes, in: 0...60)
                     Stepper("Show \(tripsToShow) trips", value: $tripsToShow, in: 1...6)
                 }
@@ -257,11 +245,11 @@ struct AddRouteView: View {
             name: resolvedRouteName,
             enabled: true,
             weekdays: DeparturesWeekday.allCases.filter { weekdays.contains($0) },
-            activeStartTime: activeStartTime.hhmmString,
-            activeEndTime: activeEndTime.hhmmString,
-            earliestLeaveTime: usesEarliestLeaveTime ? earliestLeaveTime.hhmmString : nil,
-            arrivalWindowStartTime: nil,
-            arrivalWindowEndTime: usesArrivalEndTime ? arrivalEndTime.hhmmString : nil,
+            activeStartTime: earliestArrivalTime.addingTimeInterval(-2 * 60 * 60).hhmmString,
+            activeEndTime: latestArrivalTime.hhmmString,
+            earliestLeaveTime: nil,
+            arrivalWindowStartTime: earliestArrivalTime.hhmmString,
+            arrivalWindowEndTime: latestArrivalTime.hhmmString,
             walkMinutes: walkMinutes,
             tripsToShow: tripsToShow,
             origin: origin,
@@ -396,6 +384,12 @@ struct TripRow: View {
 }
 
 private extension DepartureSchedule {
+    var arrivalWindowLabel: String {
+        let start = arrivalWindowStartTime ?? activeStartTime
+        let end = arrivalWindowEndTime ?? activeEndTime
+        return "\(start)-\(end)"
+    }
+
     var input: DepartureScheduleInput {
         DepartureScheduleInput(
             name: name,
