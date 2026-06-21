@@ -16,7 +16,7 @@ export class TfnswClient {
 
   async searchStops(query: string): Promise<StopSearchResult[]> {
     const json = await this.request("stop_finder", {
-      type_sf: "stop",
+      type_sf: "any",
       name_sf: query,
       odvSugMacro: "1",
       TfNSWSF: "true",
@@ -34,14 +34,19 @@ export class TfnswClient {
   }
 
   async searchStations(query: string): Promise<StopSearchResult[]> {
-    const stops = await this.searchStops(query);
+    const stationQuery = /\b(station|metro)\b/i.test(query) ? query : `${query} Station`;
+    const stops = await this.searchStops(stationQuery);
     const stations = stops
+      .filter((stop) => stop.type === "stop")
       .filter((stop) => /\b(station|metro)\b/i.test(stop.name))
       .map((stop) => ({
         ...stop,
         name: stop.name.replace(/\s+/g, " ").trim()
       }));
-    return uniqueById(stations).sort((left, right) => left.name.localeCompare(right.name));
+    return uniqueById(stations).sort((left, right) => {
+      const quality = (right.matchQuality ?? 0) - (left.matchQuality ?? 0);
+      return quality !== 0 ? quality : left.name.localeCompare(right.name);
+    });
   }
 
   async previewTrips(schedule: DepartureSchedule, now = new Date()): Promise<TripSnapshot[]> {

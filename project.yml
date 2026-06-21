@@ -8,6 +8,7 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: 5AMFX8X5ZN
     MARKETING_VERSION: "0.1"
     CURRENT_PROJECT_VERSION: "1"
 targets:
@@ -36,6 +37,8 @@ targets:
           UIApplicationSupportsMultipleScenes: false
     entitlements:
       path: apps/ios/DeparturesApp/Departures.entitlements
+      properties:
+        aps-environment: development
   DeparturesLiveActivityExtension:
     type: app-extension
     platform: iOS
