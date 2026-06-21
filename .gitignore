@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.build/
+DerivedData/
+*.xcuserstate
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+node_modules/
+server/data/
+server/dist/
+tmp/
+
