@@ -305,13 +305,20 @@ struct StationPickerRow: View {
                         }
                     }
                 }
+                .overlay {
+                    if model.isSearchingStations && model.stationResults.isEmpty {
+                        ProgressView()
+                            .controlSize(.large)
+                    }
+                }
                 .navigationTitle(title)
                 .searchable(text: $query, prompt: "Search stations")
-                .onChange(of: query) { _, newValue in
-                    Task { await model.searchStations(matching: newValue.isEmpty ? "Station" : newValue) }
-                }
-                .task {
-                    await model.loadInitialStations()
+                .task(id: query) {
+                    if !query.isEmpty {
+                        try? await Task.sleep(for: .milliseconds(300))
+                    }
+                    guard !Task.isCancelled else { return }
+                    await model.searchStations(matching: query.isEmpty ? "Station" : query)
                 }
             }
         }

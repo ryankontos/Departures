@@ -2,6 +2,7 @@ import type { DepartureSchedule, StopSearchResult, TripLeg, TripSnapshot } from 
 import { addMinutes, dateOnSydneyClock, maxDate, zonedParts } from "./time.js";
 
 const MAKEABLE_TRIP_GRACE_MINUTES = 2;
+const STOP_SEARCH_CACHE_MS = 10 * 60_000;
 
 type TfnswClientOptions = {
   apiKey?: string;
@@ -11,12 +12,19 @@ type TfnswClientOptions = {
 
 export class TfnswClient {
   private readonly baseUrl: string;
+  private readonly stopSearchCache = new Map<string, { expiresAt: number; results: StopSearchResult[] }>();
 
   constructor(private readonly options: TfnswClientOptions) {
     this.baseUrl = options.baseUrl ?? "https://api.transport.nsw.gov.au/v1/tp/";
   }
 
   async searchStops(query: string): Promise<StopSearchResult[]> {
+    const cacheKey = query.trim().toLowerCase();
+    const cached = this.stopSearchCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.results;
+    }
+
     const json = await this.request("stop_finder", {
       type_sf: "any",
       name_sf: query,
@@ -26,13 +34,15 @@ export class TfnswClient {
     });
 
     const locations = Array.isArray(json.locations) ? json.locations : [];
-    return locations.map((location: any): StopSearchResult => ({
+    const results = locations.map((location: any): StopSearchResult => ({
       id: String(location.id ?? ""),
       name: String(location.name ?? location.disassembledName ?? ""),
       type: location.type,
       matchQuality: typeof location.matchQuality === "number" ? location.matchQuality : undefined,
       isBest: Boolean(location.isBest)
     })).filter((location: StopSearchResult) => location.id.length > 0 && location.name.length > 0);
+    this.stopSearchCache.set(cacheKey, { expiresAt: Date.now() + STOP_SEARCH_CACHE_MS, results });
+    return results;
   }
 
   async searchStations(query: string): Promise<StopSearchResult[]> {

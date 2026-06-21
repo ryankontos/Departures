@@ -12,12 +12,15 @@ final class DeparturesModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var apiStatus = APIStatus.idle
     @Published var isCommunicatingWithAPI = false
+    @Published var isSearchingStations = false
 
     let identity = AnonymousIdentity()
     private lazy var api = DeparturesAPI(baseURL: serverBaseURL, identity: identity)
     private var devicePushToken: String?
     private var pushToStartToken: String?
     private var tokenObserverTasks: [Task<Void, Never>] = []
+    private var stationSearchCache: [String: [StopSearchResult]] = [:]
+    private var stationSearchGeneration = 0
 
     func bootstrap() async {
         api = DeparturesAPI(baseURL: serverBaseURL, identity: identity)
@@ -55,18 +58,44 @@ final class DeparturesModel: ObservableObject {
     func searchStations(matching query: String) async {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 2 else {
-            stationResults = []
+            await loadInitialStations()
             return
         }
-        await perform("Loading stations", success: "Stations loaded") {
-            let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed
-            stationResults = try await api.get([StopSearchResult].self, path: "stations?q=\(encoded)")
-        }
+        await loadStations(matching: trimmed)
     }
 
     func loadInitialStations() async {
-        await perform("Loading stations", success: "Stations loaded") {
-            stationResults = try await api.get([StopSearchResult].self, path: "stations?q=Station")
+        await loadStations(matching: "Station")
+    }
+
+    private func loadStations(matching query: String) async {
+        let cacheKey = query.lowercased()
+        stationSearchGeneration += 1
+        let generation = stationSearchGeneration
+
+        if let cached = stationSearchCache[cacheKey] {
+            stationResults = cached
+            isSearchingStations = false
+            return
+        }
+
+        isSearchingStations = true
+        do {
+            let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+            let results = try await api.get([StopSearchResult].self, path: "stations?q=\(encoded)")
+            stationSearchCache[cacheKey] = results
+            if generation == stationSearchGeneration {
+                stationResults = results
+            }
+        } catch {
+            if !Task.isCancelled {
+                let message = APIStatus.userFacingMessage(for: error)
+                errorMessage = message
+                apiStatus = .failure(message)
+            }
+        }
+        if generation == stationSearchGeneration {
+            isSearchingStations = false
         }
     }
 
