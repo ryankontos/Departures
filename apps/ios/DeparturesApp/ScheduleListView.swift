@@ -365,21 +365,63 @@ struct TripRow: View {
                 }
                 Spacer()
                 Label {
-                    Text(trip.departureTime, format: .dateTime.hour().minute())
+                    Text(trip.departureDisplayText)
                 } icon: {
                     Image(systemName: "tram")
                 }
                 Spacer()
                 Label {
-                    Text(trip.arrivalTime, format: .dateTime.hour().minute())
+                    Text(trip.arrivalDisplayText)
                 } icon: {
                     Image(systemName: "flag.checkered")
                 }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+
+            if let delayText = trip.delayText {
+                Text(delayText)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.orange)
+            }
         }
         .padding(.vertical, 4)
+    }
+}
+
+private extension TripSnapshot {
+    var delayText: String? {
+        let delay = max(departureDelayMinutes ?? 0, arrivalDelayMinutes ?? 0)
+        guard delay > 0 else { return nil }
+        return "Delayed \(delay) min"
+    }
+
+    var departureDisplayText: String {
+        if let departureDelayMinutes, departureDelayMinutes > 0 {
+            return "\(departureTime.formatted(date: .omitted, time: .shortened)) +\(departureDelayMinutes)"
+        }
+        return departureTime.formatted(date: .omitted, time: .shortened)
+    }
+
+    var arrivalDisplayText: String {
+        if let arrivalDelayMinutes, arrivalDelayMinutes > 0 {
+            return "\(arrivalTime.formatted(date: .omitted, time: .shortened)) +\(arrivalDelayMinutes)"
+        }
+        return arrivalTime.formatted(date: .omitted, time: .shortened)
+    }
+
+    var departureDelayMinutes: Int? {
+        delayMinutes(planned: plannedDepartureTime, live: departureTime)
+    }
+
+    var arrivalDelayMinutes: Int? {
+        delayMinutes(planned: plannedArrivalTime, live: arrivalTime)
+    }
+
+    private func delayMinutes(planned: Date?, live: Date) -> Int? {
+        guard let planned else { return nil }
+        let minutes = Int((live.timeIntervalSince(planned) / 60).rounded())
+        return minutes > 0 ? minutes : nil
     }
 }
 

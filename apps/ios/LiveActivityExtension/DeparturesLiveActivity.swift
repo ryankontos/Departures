@@ -105,13 +105,48 @@ struct CompactTripRow: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(trip.departureTime, style: .timer)
                         .font(.subheadline.monospacedDigit().weight(.semibold))
-                    Text("arr \(trip.arrivalTime.formatted(date: .omitted, time: .shortened))")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    if trip.delayText == nil {
+                        Text(trip.secondaryTimingText)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(trip.secondaryTimingText)
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
         }
         .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+    }
+}
+
+private extension TripSnapshot {
+    var delayText: String? {
+        let delay = max(departureDelayMinutes ?? 0, arrivalDelayMinutes ?? 0)
+        guard delay > 0 else { return nil }
+        return "delay \(delay)m"
+    }
+
+    var secondaryTimingText: String {
+        if let delayText {
+            return "\(delayText) arr \(arrivalTime.formatted(date: .omitted, time: .shortened))"
+        }
+        return "arr \(arrivalTime.formatted(date: .omitted, time: .shortened))"
+    }
+
+    var departureDelayMinutes: Int? {
+        delayMinutes(planned: plannedDepartureTime, live: departureTime)
+    }
+
+    var arrivalDelayMinutes: Int? {
+        delayMinutes(planned: plannedArrivalTime, live: arrivalTime)
+    }
+
+    private func delayMinutes(planned: Date?, live: Date) -> Int? {
+        guard let planned else { return nil }
+        let minutes = Int((live.timeIntervalSince(planned) / 60).rounded())
+        return minutes > 0 ? minutes : nil
     }
 }
 

@@ -134,6 +134,8 @@ function normalizeJourney(journey: any, schedule: DepartureSchedule, index: numb
   const lastLeg = publicLegs[publicLegs.length - 1] ?? legs[legs.length - 1];
   const departureTime = extractTime(firstLeg?.origin, "departure");
   const arrivalTime = extractTime(lastLeg?.destination, "arrival");
+  const plannedDepartureTime = extractPlannedTime(firstLeg?.origin, "departure");
+  const plannedArrivalTime = extractPlannedTime(lastLeg?.destination, "arrival");
 
   if (!departureTime || !arrivalTime) return undefined;
 
@@ -142,6 +144,8 @@ function normalizeJourney(journey: any, schedule: DepartureSchedule, index: numb
     routeLabel: leg.transportation?.number ? String(leg.transportation.number) : undefined,
     originName: String(leg.origin?.name ?? leg.origin?.disassembledName ?? schedule.origin.name),
     destinationName: String(leg.destination?.name ?? leg.destination?.disassembledName ?? schedule.destination.name),
+    plannedDepartureTime: extractPlannedTime(leg.origin, "departure")?.toISOString(),
+    plannedArrivalTime: extractPlannedTime(leg.destination, "arrival")?.toISOString(),
     departureTime: extractTime(leg.origin, "departure")?.toISOString(),
     arrivalTime: extractTime(leg.destination, "arrival")?.toISOString()
   }));
@@ -155,12 +159,21 @@ function normalizeJourney(journey: any, schedule: DepartureSchedule, index: numb
   return {
     id: String(journey.id ?? `${departureTime.toISOString()}-${index}`),
     routeSummary: routeLabels || `${schedule.origin.name} to ${schedule.destination.name}`,
+    plannedDepartureTime: plannedDepartureTime?.toISOString(),
+    plannedArrivalTime: plannedArrivalTime?.toISOString(),
     departureTime: departureTime.toISOString(),
     arrivalTime: arrivalTime.toISOString(),
     leaveTime: addMinutes(departureTime, -schedule.walkMinutes).toISOString(),
     realtime: Boolean(firstLeg?.origin?.departureTimeEstimated || lastLeg?.destination?.arrivalTimeEstimated),
     legs: normalizedLegs
   };
+}
+
+function extractPlannedTime(stop: any, kind: "departure" | "arrival"): Date | undefined {
+  const planned = stop?.[`${kind}TimePlanned`];
+  if (!planned) return undefined;
+  const date = new Date(planned);
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
 function extractTime(stop: any, kind: "departure" | "arrival"): Date | undefined {

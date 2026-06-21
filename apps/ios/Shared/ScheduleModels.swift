@@ -69,6 +69,8 @@ public struct TripLeg: Codable, Hashable, Sendable {
     public var routeLabel: String?
     public var originName: String
     public var destinationName: String
+    public var plannedDepartureTime: Date?
+    public var plannedArrivalTime: Date?
     public var departureTime: Date?
     public var arrivalTime: Date?
 }
@@ -76,6 +78,8 @@ public struct TripLeg: Codable, Hashable, Sendable {
 public struct TripSnapshot: Codable, Identifiable, Hashable, Sendable {
     public var id: String
     public var routeSummary: String
+    public var plannedDepartureTime: Date?
+    public var plannedArrivalTime: Date?
     public var departureTime: Date
     public var arrivalTime: Date
     public var leaveTime: Date

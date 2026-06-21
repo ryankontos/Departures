@@ -40,7 +40,7 @@ export class ApnsLiveActivityClient {
         "dismissal-date": timestamp + 60,
         alert: {
           title: state.scheduleName,
-          body: state.trips[0] ? `Leave ${formatClock(state.trips[0].leaveTime)} for ${formatClock(state.trips[0].departureTime)}` : "No matching departures"
+          body: state.trips[0] ? alertBody(state.trips[0]) : "No matching departures"
         }
       }
     };
@@ -96,3 +96,17 @@ function formatClock(iso: string): string {
   return new Intl.DateTimeFormat("en-AU", { hour: "numeric", minute: "2-digit" }).format(new Date(iso));
 }
 
+function alertBody(trip: LiveActivityState["trips"][number]): string {
+  const delay = Math.max(
+    delayMinutes(trip.plannedDepartureTime, trip.departureTime) ?? 0,
+    delayMinutes(trip.plannedArrivalTime, trip.arrivalTime) ?? 0
+  );
+  const delayText = delay > 0 ? `, delayed ${delay} min` : "";
+  return `Leave ${formatClock(trip.leaveTime)} for ${formatClock(trip.departureTime)}${delayText}`;
+}
+
+function delayMinutes(planned: string | undefined, live: string): number | undefined {
+  if (!planned) return undefined;
+  const minutes = Math.round((new Date(live).getTime() - new Date(planned).getTime()) / 60_000);
+  return minutes > 0 ? minutes : undefined;
+}

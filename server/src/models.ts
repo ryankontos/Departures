@@ -60,6 +60,8 @@ export const tripLegSchema = z.object({
   routeLabel: z.string().optional(),
   originName: z.string(),
   destinationName: z.string(),
+  plannedDepartureTime: z.string().datetime().optional(),
+  plannedArrivalTime: z.string().datetime().optional(),
   departureTime: z.string().datetime().optional(),
   arrivalTime: z.string().datetime().optional()
 });
@@ -68,6 +70,8 @@ export type TripLeg = z.infer<typeof tripLegSchema>;
 export const tripSnapshotSchema = z.object({
   id: z.string(),
   routeSummary: z.string(),
+  plannedDepartureTime: z.string().datetime().optional(),
+  plannedArrivalTime: z.string().datetime().optional(),
   departureTime: z.string().datetime(),
   arrivalTime: z.string().datetime(),
   leaveTime: z.string().datetime(),
