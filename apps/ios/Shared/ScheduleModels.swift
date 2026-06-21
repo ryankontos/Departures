@@ -96,6 +96,7 @@ public struct DeviceRegistration: Codable, Sendable {
     public var deviceId: String
     public var userId: String
     public var name: String?
+    public var devicePushToken: String?
     public var pushToStartToken: String?
 }
 

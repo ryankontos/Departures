@@ -82,6 +82,7 @@ export const deviceRegistrationSchema = z.object({
   deviceId: z.string().min(1),
   userId: z.string().min(1).optional(),
   name: z.string().optional(),
+  devicePushToken: z.string().optional(),
   pushToStartToken: z.string().optional()
 });
 

@@ -86,6 +86,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
       userId: parsed.userId ?? userIdFrom(request),
       deviceId: parsed.deviceId,
       name: parsed.name,
+      devicePushToken: parsed.devicePushToken,
       pushToStartToken: parsed.pushToStartToken,
       updatedAt: new Date().toISOString()
     });

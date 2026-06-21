@@ -8,6 +8,7 @@ export type DeviceRecord = {
   userId: string;
   deviceId: string;
   name?: string;
+  devicePushToken?: string;
   pushToStartToken?: string;
   updatedAt: string;
 };
@@ -41,6 +42,7 @@ export class Storage {
         device_id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL DEFAULT 'local',
         name TEXT,
+        device_push_token TEXT,
         push_to_start_token TEXT,
         updated_at TEXT NOT NULL
       );
@@ -56,6 +58,7 @@ export class Storage {
         updated_at TEXT NOT NULL
       );
     `);
+    this.addColumnIfMissing("devices", "device_push_token", "TEXT");
   }
 
   listSchedules(): DepartureSchedule[] {
@@ -90,24 +93,26 @@ export class Storage {
 
   upsertDevice(record: DeviceRecord) {
     this.db.prepare(`
-      INSERT INTO devices (device_id, user_id, name, push_to_start_token, updated_at)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO devices (device_id, user_id, name, device_push_token, push_to_start_token, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(device_id) DO UPDATE SET
         user_id = excluded.user_id,
         name = excluded.name,
+        device_push_token = COALESCE(excluded.device_push_token, devices.device_push_token),
         push_to_start_token = COALESCE(excluded.push_to_start_token, devices.push_to_start_token),
         updated_at = excluded.updated_at
-    `).run(record.deviceId, record.userId, record.name ?? null, record.pushToStartToken ?? null, record.updatedAt);
+    `).run(record.deviceId, record.userId, record.name ?? null, record.devicePushToken ?? null, record.pushToStartToken ?? null, record.updatedAt);
   }
 
   listDevices(userId?: string): DeviceRecord[] {
     const sql = userId
-      ? "SELECT user_id, device_id, name, push_to_start_token, updated_at FROM devices WHERE user_id = ?"
-      : "SELECT user_id, device_id, name, push_to_start_token, updated_at FROM devices";
+      ? "SELECT user_id, device_id, name, device_push_token, push_to_start_token, updated_at FROM devices WHERE user_id = ?"
+      : "SELECT user_id, device_id, name, device_push_token, push_to_start_token, updated_at FROM devices";
     const rows = (userId ? this.db.prepare(sql).all(userId) : this.db.prepare(sql).all()) as Array<{
       user_id: string;
       device_id: string;
       name?: string;
+      device_push_token?: string;
       push_to_start_token?: string;
       updated_at: string;
     }>;
@@ -115,6 +120,7 @@ export class Storage {
       userId: row.user_id,
       deviceId: row.device_id,
       name: row.name,
+      devicePushToken: row.device_push_token,
       pushToStartToken: row.push_to_start_token,
       updatedAt: row.updated_at
     }));
@@ -147,6 +153,13 @@ export class Storage {
   activeLiveActivitiesForSchedule(scheduleId: string): LiveActivityRecord[] {
     const rows = this.db.prepare("SELECT * FROM live_activities WHERE schedule_id = ? AND status = 'active'").all(scheduleId) as any[];
     return rows.map(rowToLiveActivity);
+  }
+
+  private addColumnIfMissing(table: string, column: string, type: string) {
+    const rows = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    if (!rows.some((row) => row.name === column)) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    }
   }
 }
 

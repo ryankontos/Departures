@@ -15,10 +15,15 @@ final class DeparturesModel: ObservableObject {
 
     let identity = AnonymousIdentity()
     private lazy var api = DeparturesAPI(baseURL: serverBaseURL, identity: identity)
+    private var devicePushToken: String?
+    private var pushToStartToken: String?
+    private var tokenObserverTasks: [Task<Void, Never>] = []
 
     func bootstrap() async {
         api = DeparturesAPI(baseURL: serverBaseURL, identity: identity)
         apiStatus = .working("Connecting to Departures API")
+        requestPushAuthorization()
+        startActivityTokenObservers()
         await registerDevice()
         await loadSchedules()
     }
@@ -81,9 +86,14 @@ final class DeparturesModel: ObservableObject {
             _ = try Activity<DepartureActivityAttributes>.request(
                 attributes: attributes,
                 content: .init(state: state, staleDate: Date().addingTimeInterval(15 * 60)),
-                pushType: nil
+                pushType: .token
             )
         }
+    }
+
+    func updateDevicePushToken(_ tokenData: Data) {
+        devicePushToken = tokenData.hexString
+        Task { await registerDevice() }
     }
 
     func registerDevice() async {
@@ -91,7 +101,8 @@ final class DeparturesModel: ObservableObject {
             deviceId: identity.deviceId,
             userId: identity.userId,
             name: UIDevice.current.name,
-            pushToStartToken: nil
+            devicePushToken: devicePushToken,
+            pushToStartToken: pushToStartToken
         )
         await perform("Registering this iPhone", success: "This iPhone is linked to the API") {
             try await api.postNoResponse(path: "devices", body: registration)
@@ -114,6 +125,83 @@ final class DeparturesModel: ObservableObject {
             apiStatus = .failure(message)
         }
         isCommunicatingWithAPI = false
+    }
+
+    private func requestPushAuthorization() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if let error {
+                Task { @MainActor in
+                    self.apiStatus = .failure("Push notification permission failed: \(error.localizedDescription)")
+                }
+                return
+            }
+
+            guard granted else {
+                Task { @MainActor in
+                    self.apiStatus = .failure("Push notifications are disabled for Departures.")
+                }
+                return
+            }
+
+            DispatchQueue.main.async {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+        }
+    }
+
+    private func startActivityTokenObservers() {
+        guard tokenObserverTasks.isEmpty else { return }
+
+        if #available(iOS 17.2, *) {
+            tokenObserverTasks.append(Task { [weak self] in
+                for await tokenData in Activity<DepartureActivityAttributes>.pushToStartTokenUpdates {
+                    await MainActor.run {
+                        self?.pushToStartToken = tokenData.hexString
+                        Task { await self?.registerDevice() }
+                    }
+                }
+            })
+        }
+
+        tokenObserverTasks.append(Task { [weak self] in
+            for await activity in Activity<DepartureActivityAttributes>.activityUpdates {
+                let activityId = activity.id
+                let scheduleId = activity.attributes.scheduleId.uuidString
+                Task {
+                    for await tokenData in activity.pushTokenUpdates {
+                        await self?.registerLiveActivityToken(tokenData.hexString, activityId: activityId, scheduleId: scheduleId)
+                    }
+                }
+            }
+        })
+    }
+
+    private func registerLiveActivityToken(_ token: String, activityId: String, scheduleId: String) async {
+        let path = "live-activities/\(activityId)/token?scheduleId=\(scheduleId)&deviceId=\(identity.deviceId)"
+        do {
+            try await api.postNoResponse(path: path, body: PushTokenRegistration(token: token))
+            apiStatus = .success("Live Activity push token registered")
+        } catch {
+            let message = APIStatus.userFacingMessage(for: error)
+            errorMessage = message
+            apiStatus = .failure(message)
+        }
+    }
+}
+
+final class DeparturesAppDelegate: NSObject, UIApplicationDelegate {
+    weak var model: DeparturesModel?
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Task { @MainActor in
+            model?.updateDevicePushToken(deviceToken)
+        }
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        Task { @MainActor in
+            model?.apiStatus = .failure("APNS registration failed: \(error.localizedDescription)")
+        }
     }
 }
 
@@ -251,6 +339,16 @@ enum DeparturesAPIError: LocalizedError {
             }
             return "The Departures API returned HTTP \(status)."
         }
+    }
+}
+
+struct PushTokenRegistration: Codable, Sendable {
+    var token: String
+}
+
+private extension Data {
+    var hexString: String {
+        map { String(format: "%02x", $0) }.joined()
     }
 }
 
