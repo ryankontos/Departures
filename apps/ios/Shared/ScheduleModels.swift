@@ -99,19 +99,15 @@ public struct DeviceRegistration: Codable, Sendable {
     public var pushToStartToken: String?
 }
 
-public extension DepartureScheduleInput {
-    static let hornsbyMorning = DepartureScheduleInput(
-        name: "Morning commute",
-        enabled: true,
-        weekdays: [.monday, .tuesday, .wednesday, .thursday, .friday],
-        activeStartTime: "07:00",
-        activeEndTime: "09:00",
-        earliestLeaveTime: "07:28",
-        arrivalWindowStartTime: nil,
-        arrivalWindowEndTime: "09:15",
-        walkMinutes: 12,
-        tripsToShow: 3,
-        origin: RouteEndpoint(id: "10101100", name: "Hornsby Station"),
-        destination: RouteEndpoint(id: "10101429", name: "Martin Place Station")
-    )
+public struct StopSearchResult: Codable, Identifiable, Hashable, Sendable {
+    public var id: String
+    public var name: String
+    public var type: String?
+    public var matchQuality: Double?
+    public var isBest: Bool?
+}
+
+public struct JourneyPreviewRequest: Codable, Sendable {
+    public var schedule: DepartureScheduleInput
+    public var now: Date?
 }

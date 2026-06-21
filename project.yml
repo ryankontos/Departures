@@ -15,6 +15,9 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "17.0"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ryankontos.Departures
     sources:
       - apps/ios/DeparturesApp
       - apps/ios/Shared
@@ -37,6 +40,9 @@ targets:
     type: app-extension
     platform: iOS
     deploymentTarget: "17.0"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ryankontos.Departures.LiveActivityExtension
     sources:
       - apps/ios/LiveActivityExtension
       - apps/ios/Shared
@@ -55,6 +61,9 @@ targets:
     type: application
     platform: watchOS
     deploymentTarget: "10.0"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ryankontos.Departures.watchkitapp
     sources:
       - apps/watch/DeparturesWatchApp
       - apps/ios/Shared/ScheduleModels.swift
@@ -65,6 +74,7 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         WKApplication: true
+        WKCompanionAppBundleIdentifier: com.ryankontos.Departures
 schemes:
   Departures:
     build:
@@ -74,4 +84,3 @@ schemes:
         DeparturesWatchApp: all
     run:
       config: Debug
-

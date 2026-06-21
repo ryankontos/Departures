@@ -16,11 +16,11 @@ export class TfnswClient {
 
   async searchStops(query: string): Promise<StopSearchResult[]> {
     const json = await this.request("stop_finder", {
-      type_sf: "any",
+      type_sf: "stop",
       name_sf: query,
       odvSugMacro: "1",
       TfNSWSF: "true",
-      anyMaxSizeHitList: "12"
+      anyMaxSizeHitList: "50"
     });
 
     const locations = Array.isArray(json.locations) ? json.locations : [];
@@ -31,6 +31,17 @@ export class TfnswClient {
       matchQuality: typeof location.matchQuality === "number" ? location.matchQuality : undefined,
       isBest: Boolean(location.isBest)
     })).filter((location: StopSearchResult) => location.id.length > 0 && location.name.length > 0);
+  }
+
+  async searchStations(query: string): Promise<StopSearchResult[]> {
+    const stops = await this.searchStops(query);
+    const stations = stops
+      .filter((stop) => /\b(station|metro)\b/i.test(stop.name))
+      .map((stop) => ({
+        ...stop,
+        name: stop.name.replace(/\s+/g, " ").trim()
+      }));
+    return uniqueById(stations).sort((left, right) => left.name.localeCompare(right.name));
   }
 
   async previewTrips(schedule: DepartureSchedule, now = new Date()): Promise<TripSnapshot[]> {
@@ -100,6 +111,15 @@ export class TfnswClient {
 
     return response.json();
   }
+}
+
+function uniqueById(stops: StopSearchResult[]): StopSearchResult[] {
+  const seen = new Set<string>();
+  return stops.filter((stop) => {
+    if (seen.has(stop.id)) return false;
+    seen.add(stop.id);
+    return true;
+  });
 }
 
 function normalizeJourney(journey: any, schedule: DepartureSchedule, index: number): TripSnapshot | undefined {

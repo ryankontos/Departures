@@ -2,10 +2,15 @@ import SwiftUI
 
 struct ScheduleListView: View {
     @EnvironmentObject private var model: DeparturesModel
+    @State private var showingAddRoute = false
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    APIStatusRow(status: model.apiStatus)
+                }
+
                 Section {
                     ForEach(model.schedules) { schedule in
                         NavigationLink {
@@ -18,16 +23,11 @@ struct ScheduleListView: View {
 
                 Section {
                     Button {
-                        Task { await model.createExampleSchedule() }
+                        showingAddRoute = true
                     } label: {
-                        Label("Add Hornsby morning commute", systemImage: "plus")
+                        Label("Add route", systemImage: "plus")
                     }
-
-                    Button {
-                        Task { await model.preview() }
-                    } label: {
-                        Label("Preview next trips", systemImage: "clock")
-                    }
+                    .disabled(model.isCommunicatingWithAPI)
                 }
 
                 if !model.previewTrips.isEmpty {
@@ -39,8 +39,17 @@ struct ScheduleListView: View {
                 }
             }
             .navigationTitle("Departures")
+            .sheet(isPresented: $showingAddRoute) {
+                AddRouteView()
+            }
             .refreshable {
                 await model.loadSchedules()
+            }
+            .overlay {
+                if model.isCommunicatingWithAPI && model.schedules.isEmpty && model.previewTrips.isEmpty {
+                    ProgressView()
+                        .controlSize(.large)
+                }
             }
             .alert("Departures", isPresented: Binding(
                 get: { model.errorMessage != nil },
@@ -50,6 +59,50 @@ struct ScheduleListView: View {
             } message: {
                 Text(model.errorMessage ?? "")
             }
+        }
+    }
+}
+
+struct APIStatusRow: View {
+    var status: APIStatus
+
+    var body: some View {
+        HStack(spacing: 12) {
+            statusIcon
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(status.title)
+                    .font(.headline)
+                Text(status.message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var statusIcon: some View {
+        switch status {
+        case .working:
+            ProgressView()
+                .frame(width: 28, height: 28)
+        case .success:
+            Image(systemName: status.systemImage)
+                .font(.title3)
+                .foregroundStyle(.green)
+                .frame(width: 28, height: 28)
+        case .failure:
+            Image(systemName: status.systemImage)
+                .font(.title3)
+                .foregroundStyle(.red)
+                .frame(width: 28, height: 28)
+        case .idle:
+            Image(systemName: status.systemImage)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
         }
     }
 }
@@ -81,6 +134,7 @@ struct ScheduleRow: View {
 }
 
 struct ScheduleDetailView: View {
+    @EnvironmentObject private var model: DeparturesModel
     var schedule: DepartureSchedule
 
     var body: some View {
@@ -96,8 +150,192 @@ struct ScheduleDetailView: View {
                 LabeledContent("Walk", value: "\(schedule.walkMinutes) min")
                 LabeledContent("Trips", value: "\(schedule.tripsToShow)")
             }
+
+            Section {
+                Button {
+                    Task { await model.preview(schedule.input) }
+                } label: {
+                    Label("Preview next departures", systemImage: "clock")
+                }
+                .disabled(model.isCommunicatingWithAPI)
+
+                Button {
+                    Task { await model.testLiveActivity(for: schedule.input) }
+                } label: {
+                    Label("Test Live Activity now", systemImage: "rectangle.inset.filled.and.person.filled")
+                }
+                .disabled(model.isCommunicatingWithAPI)
+            }
         }
         .navigationTitle(schedule.name)
+    }
+}
+
+struct AddRouteView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var model: DeparturesModel
+
+    @State private var name = ""
+    @State private var origin: RouteEndpoint?
+    @State private var destination: RouteEndpoint?
+    @State private var activeStartTime = "07:00"
+    @State private var activeEndTime = "09:00"
+    @State private var earliestLeaveTime = ""
+    @State private var arrivalEndTime = ""
+    @State private var walkMinutes = 12
+    @State private var tripsToShow = 3
+    @State private var weekdays = Set(DeparturesWeekday.allCases.prefix(5))
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Route") {
+                    TextField("Name", text: $name)
+                    StationPickerRow(title: "From", selection: $origin)
+                    StationPickerRow(title: "To", selection: $destination)
+                }
+
+                Section("Days") {
+                    WeekdayToggleGrid(selection: $weekdays)
+                }
+
+                Section("Timing") {
+                    TextField("Start showing", text: $activeStartTime)
+                        .textInputAutocapitalization(.never)
+                    TextField("Stop showing", text: $activeEndTime)
+                        .textInputAutocapitalization(.never)
+                    TextField("Earliest leave time", text: $earliestLeaveTime)
+                        .textInputAutocapitalization(.never)
+                    TextField("Latest arrival time", text: $arrivalEndTime)
+                        .textInputAutocapitalization(.never)
+                    Stepper("Walk \(walkMinutes) min", value: $walkMinutes, in: 0...60)
+                    Stepper("Show \(tripsToShow) trips", value: $tripsToShow, in: 1...6)
+                }
+
+                Section {
+                    Button {
+                        guard let input else { return }
+                        Task {
+                            await model.saveSchedule(input)
+                            dismiss()
+                        }
+                    } label: {
+                        Label("Save route", systemImage: "checkmark")
+                    }
+                    .disabled(input == nil || model.isCommunicatingWithAPI)
+
+                    Button {
+                        guard let input else { return }
+                        Task { await model.testLiveActivity(for: input) }
+                    } label: {
+                        Label("Test Live Activity now", systemImage: "rectangle.inset.filled.and.person.filled")
+                    }
+                    .disabled(input == nil || model.isCommunicatingWithAPI)
+                }
+            }
+            .navigationTitle("New Route")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .task {
+                await model.loadInitialStations()
+            }
+        }
+    }
+
+    private var input: DepartureScheduleInput? {
+        guard let origin, let destination, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !weekdays.isEmpty else {
+            return nil
+        }
+        return DepartureScheduleInput(
+            name: name,
+            enabled: true,
+            weekdays: DeparturesWeekday.allCases.filter { weekdays.contains($0) },
+            activeStartTime: activeStartTime,
+            activeEndTime: activeEndTime,
+            earliestLeaveTime: earliestLeaveTime.nilIfBlank,
+            arrivalWindowStartTime: nil,
+            arrivalWindowEndTime: arrivalEndTime.nilIfBlank,
+            walkMinutes: walkMinutes,
+            tripsToShow: tripsToShow,
+            origin: origin,
+            destination: destination
+        )
+    }
+}
+
+struct StationPickerRow: View {
+    @EnvironmentObject private var model: DeparturesModel
+    var title: String
+    @Binding var selection: RouteEndpoint?
+    @State private var query = ""
+    @State private var showingPicker = false
+
+    var body: some View {
+        Button {
+            showingPicker = true
+        } label: {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(selection?.name ?? "Choose station")
+                    .foregroundStyle(selection == nil ? .secondary : .primary)
+                    .multilineTextAlignment(.trailing)
+            }
+        }
+        .sheet(isPresented: $showingPicker) {
+            NavigationStack {
+                List(model.stationResults) { station in
+                    Button {
+                        selection = RouteEndpoint(id: station.id, name: station.name)
+                        showingPicker = false
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(station.name)
+                                .foregroundStyle(.primary)
+                            Text(station.id)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .navigationTitle(title)
+                .searchable(text: $query, prompt: "Search stations")
+                .onChange(of: query) { _, newValue in
+                    Task { await model.searchStations(matching: newValue.isEmpty ? "Station" : newValue) }
+                }
+                .task {
+                    await model.loadInitialStations()
+                }
+            }
+        }
+    }
+}
+
+struct WeekdayToggleGrid: View {
+    @Binding var selection: Set<DeparturesWeekday>
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(DeparturesWeekday.allCases) { weekday in
+                Button {
+                    if selection.contains(weekday) {
+                        selection.remove(weekday)
+                    } else {
+                        selection.insert(weekday)
+                    }
+                } label: {
+                    Text(weekday.shortTitle)
+                        .font(.caption.bold())
+                        .frame(width: 32, height: 32)
+                        .background(selection.contains(weekday) ? Color.accentColor : Color.secondary.opacity(0.16), in: Circle())
+                        .foregroundStyle(selection.contains(weekday) ? .white : .primary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 }
 
@@ -138,5 +376,31 @@ struct TripRow: View {
             .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
+    }
+}
+
+private extension DepartureSchedule {
+    var input: DepartureScheduleInput {
+        DepartureScheduleInput(
+            name: name,
+            enabled: enabled,
+            weekdays: weekdays,
+            activeStartTime: activeStartTime,
+            activeEndTime: activeEndTime,
+            earliestLeaveTime: earliestLeaveTime,
+            arrivalWindowStartTime: arrivalWindowStartTime,
+            arrivalWindowEndTime: arrivalWindowEndTime,
+            walkMinutes: walkMinutes,
+            tripsToShow: tripsToShow,
+            origin: origin,
+            destination: destination
+        )
+    }
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

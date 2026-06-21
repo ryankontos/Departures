@@ -317,7 +317,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.ryankontos.DeparturesLiveActivityExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ryankontos.Departures.LiveActivityExtension;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -334,7 +334,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.ryankontos.DeparturesLiveActivityExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ryankontos.Departures.LiveActivityExtension;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -345,7 +345,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_FILE = apps/watch/DeparturesWatchApp/Info.plist;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ryankontos.DeparturesWatchApp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ryankontos.Departures.watchkitapp;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 4;
@@ -358,7 +358,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_FILE = apps/watch/DeparturesWatchApp/Info.plist;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ryankontos.DeparturesWatchApp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ryankontos.Departures.watchkitapp;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = 4;

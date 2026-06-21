@@ -27,6 +27,12 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps) {
     return deps.tfnsw.searchStops(query);
   });
 
+  app.get("/api/stations", async (request) => {
+    const query = String((request.query as any).q ?? "Station");
+    if (query.trim().length < 2) return [];
+    return deps.tfnsw.searchStations(query);
+  });
+
   app.get("/api/schedules", async (request) => deps.storage.listSchedulesForUser(userIdFrom(request)));
 
   app.post("/api/schedules", async (request, reply) => {
