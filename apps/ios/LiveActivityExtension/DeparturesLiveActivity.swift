@@ -2,6 +2,8 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
+private let makeableTripGrace: TimeInterval = 2 * 60
+
 struct DeparturesLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: DepartureActivityAttributes.self) { context in
@@ -208,12 +210,14 @@ private extension Array where Element: Hashable {
 
 private extension DepartureActivityAttributes.ContentState {
     var visibleTrips: [TripSnapshot] {
-        let cutoff = Date().addingTimeInterval(-3 * 60)
-        return trips.filter { $0.leaveTime >= cutoff }
+        let cutoff = Date().addingTimeInterval(-makeableTripGrace)
+        return trips
+            .filter { $0.leaveTime >= cutoff }
+            .sorted { $0.departureTime < $1.departureTime }
     }
 
     var focusTrip: TripSnapshot? {
-        if let selectedTripId, let selected = trips.first(where: { $0.id == selectedTripId }) {
+        if let selectedTripId, let selected = visibleTrips.first(where: { $0.id == selectedTripId }) {
             return selected
         }
         return visibleTrips.first

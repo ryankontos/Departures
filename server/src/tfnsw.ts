@@ -1,6 +1,8 @@
 import type { DepartureSchedule, StopSearchResult, TripLeg, TripSnapshot } from "./models.js";
 import { addMinutes, dateOnSydneyClock, maxDate, zonedParts } from "./time.js";
 
+const MAKEABLE_TRIP_GRACE_MINUTES = 2;
+
 type TfnswClientOptions = {
   apiKey?: string;
   timeZone: string;
@@ -73,7 +75,7 @@ export class TfnswClient {
       .filter((trip: TripSnapshot | undefined): trip is TripSnapshot => {
         if (!trip) return false;
         const leave = new Date(trip.leaveTime);
-        if (leave.getTime() + 3 * 60_000 < now.getTime()) return false;
+        if (leave.getTime() + MAKEABLE_TRIP_GRACE_MINUTES * 60_000 < now.getTime()) return false;
         if (schedule.arrivalWindowStartTime) {
           const start = dateOnSydneyClock(serviceNow, schedule.arrivalWindowStartTime, this.options.timeZone);
           if (new Date(trip.arrivalTime).getTime() < start.getTime()) return false;
