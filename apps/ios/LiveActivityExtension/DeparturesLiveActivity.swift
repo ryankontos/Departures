@@ -95,6 +95,12 @@ struct CompactTripRow: View {
                     Text(trip.routeSummary)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
+                    if let routeText = trip.compactRouteDetailText {
+                        Text(routeText)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                     Text("Leave \(trip.leaveTime.formatted(date: .omitted, time: .shortened))")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -122,6 +128,21 @@ struct CompactTripRow: View {
 }
 
 private extension TripSnapshot {
+    var compactRouteDetailText: String? {
+        let transferPoints = legs.transferPointNames
+        guard !transferPoints.isEmpty else { return nil }
+
+        let labels = legs
+            .filter { !$0.isTrivialWalkLeg }
+            .compactMap(\.routeLabel)
+            .filter { !$0.isEmpty }
+            .uniqued()
+            .joined(separator: " -> ")
+
+        let via = "via \(transferPoints.joined(separator: ", "))"
+        return labels.isEmpty ? via : "\(labels) \(via)"
+    }
+
     var delayText: String? {
         let delay = max(departureDelayMinutes ?? 0, arrivalDelayMinutes ?? 0)
         guard delay > 0 else { return nil }
@@ -147,6 +168,41 @@ private extension TripSnapshot {
         guard let planned else { return nil }
         let minutes = Int((live.timeIntervalSince(planned) / 60).rounded())
         return minutes > 0 ? minutes : nil
+    }
+}
+
+private extension Array where Element == TripLeg {
+    var transferPointNames: [String] {
+        let publicLegs = filter { !$0.isTrivialWalkLeg }
+        guard publicLegs.count > 1 else { return [] }
+        return publicLegs
+            .dropLast()
+            .map { $0.destinationName.stationDisplayName }
+            .uniqued()
+    }
+}
+
+private extension TripLeg {
+    var isTrivialWalkLeg: Bool {
+        mode.localizedCaseInsensitiveContains("walk") || mode.localizedCaseInsensitiveContains("footpath")
+    }
+}
+
+private extension String {
+    var stationDisplayName: String {
+        replacingOccurrences(of: " Station", with: "")
+            .replacingOccurrences(of: #", Platform \d+"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: ", Sydney", with: "")
+            .replacingOccurrences(of: ", Hornsby", with: "")
+            .replacingOccurrences(of: ", Chatswood", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private extension Array where Element: Hashable {
+    func uniqued() -> [Element] {
+        var seen = Set<Element>()
+        return filter { seen.insert($0).inserted }
     }
 }
 

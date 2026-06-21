@@ -182,6 +182,7 @@ function normalizeJourney(journey: any, schedule: DepartureSchedule, index: numb
   }));
 
   const routeLabels = normalizedLegs
+    .filter((leg) => !isWalkMode(leg.mode))
     .map((leg) => leg.routeLabel ?? leg.mode)
     .filter(Boolean)
     .slice(0, 3)
@@ -198,6 +199,10 @@ function normalizeJourney(journey: any, schedule: DepartureSchedule, index: numb
     realtime: Boolean(firstLeg?.origin?.departureTimeEstimated || lastLeg?.destination?.arrivalTimeEstimated),
     legs: normalizedLegs
   };
+}
+
+function isWalkMode(mode: string): boolean {
+  return /walk|footpath/i.test(mode);
 }
 
 function extractPlannedTime(stop: any, kind: "departure" | "arrival"): Date | undefined {

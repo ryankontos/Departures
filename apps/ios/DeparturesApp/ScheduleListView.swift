@@ -351,12 +351,21 @@ struct TripRow: View {
             HStack {
                 Text(trip.routeSummary)
                     .font(.headline)
+                    .lineLimit(2)
                 Spacer()
                 if trip.realtime {
                     Image(systemName: "dot.radiowaves.left.and.right")
                         .foregroundStyle(.green)
                 }
             }
+
+            if let routeText = trip.routeDetailText {
+                Text(routeText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+
             HStack {
                 Label {
                     Text(trip.leaveTime, format: .dateTime.hour().minute())
@@ -390,6 +399,15 @@ struct TripRow: View {
 }
 
 private extension TripSnapshot {
+    var routeDetailText: String? {
+        let legDescriptions = legs
+            .filter { !$0.isTrivialWalkLeg }
+            .map(\.routeDescription)
+            .uniqued()
+        guard legDescriptions.count > 1 else { return nil }
+        return legDescriptions.joined(separator: "  ->  ")
+    }
+
     var delayText: String? {
         let delay = max(departureDelayMinutes ?? 0, arrivalDelayMinutes ?? 0)
         guard delay > 0 else { return nil }
@@ -422,6 +440,37 @@ private extension TripSnapshot {
         guard let planned else { return nil }
         let minutes = Int((live.timeIntervalSince(planned) / 60).rounded())
         return minutes > 0 ? minutes : nil
+    }
+}
+
+private extension TripLeg {
+    var isTrivialWalkLeg: Bool {
+        mode.localizedCaseInsensitiveContains("walk") || mode.localizedCaseInsensitiveContains("footpath")
+    }
+
+    var routeDescription: String {
+        if let routeLabel, !routeLabel.isEmpty {
+            return "\(routeLabel) \(originName.stationDisplayName) to \(destinationName.stationDisplayName)"
+        }
+        return "\(mode) \(originName.stationDisplayName) to \(destinationName.stationDisplayName)"
+    }
+}
+
+private extension String {
+    var stationDisplayName: String {
+        replacingOccurrences(of: " Station", with: "")
+            .replacingOccurrences(of: #", Platform \d+"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: ", Sydney", with: "")
+            .replacingOccurrences(of: ", Hornsby", with: "")
+            .replacingOccurrences(of: ", Chatswood", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private extension Array where Element: Hashable {
+    func uniqued() -> [Element] {
+        var seen = Set<Element>()
+        return filter { seen.insert($0).inserted }
     }
 }
 
